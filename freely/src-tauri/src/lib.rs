@@ -1,5 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod activate;
+mod agents;
 mod api;
 mod capture;
 mod db;
@@ -115,6 +116,12 @@ pub fn run() {
             speaker::get_audio_sample_rate,
             speaker::get_input_devices,
             speaker::get_output_devices,
+            agents::check_tool_installed,
+            agents::check_claude_authenticated,
+            agents::open_terminal_for_login,
+            agents::run_claude,
+            agents::run_codex,
+            agents::run_gemini,
         ])
         .setup(|app| {
             // Setup main window positioning
