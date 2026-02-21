@@ -10,9 +10,9 @@ tools:
   - Grep
   - Bash
 skills:
-  - webapp-testing
-  - typescript-unit-testing
-  - typescript-e2e-testing
+  - agents/test-dev/webapp-testing
+  - agents/test-dev/typescript-unit-testing
+  - agents/test-dev/typescript-e2e-testing
 memory: project
 ---
 

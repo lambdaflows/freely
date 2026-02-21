@@ -10,8 +10,8 @@ tools:
   - Grep
   - Bash
 skills:
-  - postgresql
-  - pg-aiguide
+  - agents/db-specialist/postgresql
+  - agents/db-specialist/pg-aiguide
 memory: project
 ---
 

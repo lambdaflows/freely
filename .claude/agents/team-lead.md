@@ -7,7 +7,7 @@ tools:
   - Grep
   - Bash
 skills:
-  - code-review
+  - agents/team-lead/code-review
 memory: project
 ---
 

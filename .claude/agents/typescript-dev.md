@@ -10,7 +10,7 @@ tools:
   - Grep
   - Bash
 skills:
-  - mastering-typescript
+  - agents/typescript-dev/mastering-typescript
 memory: project
 ---
 

@@ -10,8 +10,8 @@ tools:
   - Grep
   - Bash
 skills:
-  - mcp-builder
-  - github-ops
+  - agents/backend-dev/mcp-builder
+  - agents/backend-dev/github-ops
 memory: project
 ---
 

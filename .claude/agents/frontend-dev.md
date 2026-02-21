@@ -10,9 +10,9 @@ tools:
   - Grep
   - Bash
 skills:
-  - frontend-design
-  - webapp-testing
-  - web-artifacts-builder
+  - agents/frontend-dev/frontend-design
+  - agents/frontend-dev/webapp-testing
+  - agents/frontend-dev/web-artifacts-builder
 memory: project
 ---
 

@@ -10,9 +10,9 @@ tools:
   - Grep
   - Bash
 skills:
-  - aws-cdk
-  - aws-cost-ops
-  - terraform-skill
+  - agents/aws-specialist/aws-cdk
+  - agents/aws-specialist/aws-cost-ops
+  - agents/aws-specialist/terraform-skill
 memory: project
 ---
 

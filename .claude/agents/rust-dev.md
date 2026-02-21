@@ -10,7 +10,7 @@ tools:
   - Grep
   - Bash
 skills:
-  - rust-skills
+  - agents/rust-dev/rust-skills
 memory: project
 ---
 

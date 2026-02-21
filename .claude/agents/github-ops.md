@@ -10,7 +10,7 @@ tools:
   - Grep
   - Bash
 skills:
-  - github-ops
+  - agents/github-ops/github-ops
 memory: project
 ---
 
