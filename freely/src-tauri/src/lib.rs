@@ -46,7 +46,6 @@ pub fn run() {
             is_hidden: Mutex::new(false),
         })
         .manage(shortcuts::RegisteredShortcuts::default())
-        .manage(shortcuts::LicenseState::default())
         .manage(shortcuts::MoveWindowState::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -86,7 +85,6 @@ pub fn run() {
             shortcuts::get_registered_shortcuts,
             shortcuts::update_shortcuts,
             shortcuts::validate_shortcut_key,
-            shortcuts::set_license_status,
             shortcuts::set_app_icon_visibility,
             shortcuts::set_always_on_top,
             shortcuts::exit_app,
