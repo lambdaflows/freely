@@ -176,6 +176,8 @@ export async function* fetchAIResponse(params: {
   userMessage: string;
   imagesBase64?: string[];
   signal?: AbortSignal;
+  /** Conversation ID for session continuity across mic presses */
+  conversationId?: string;
 }): AsyncIterable<string> {
   try {
     const {
@@ -186,6 +188,7 @@ export async function* fetchAIResponse(params: {
       userMessage,
       imagesBase64 = [],
       signal,
+      conversationId,
     } = params;
 
     // Check if already aborted
@@ -217,6 +220,7 @@ export async function* fetchAIResponse(params: {
           role: m.role as "user" | "assistant" | "system",
           content: typeof m.content === "string" ? m.content : "",
         })),
+        sessionId: conversationId,
         apiKey,
         model,
         signal,

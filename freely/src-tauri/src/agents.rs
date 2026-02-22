@@ -56,6 +56,10 @@ pub struct AgentPayload {
     #[serde(rename = "apiKey")]
     pub api_key: Option<String>,
     pub model: Option<String>,
+    /// Claude CLI session ID for `--resume` continuity.
+    /// When set, the CLI resumes the existing conversation instead of starting fresh.
+    #[serde(rename = "agentSessionId")]
+    pub agent_session_id: Option<String>,
 }
 
 // ============================================================================
@@ -303,6 +307,12 @@ pub async fn run_claude(
         .arg("--output-format")
         .arg("stream-json")
         .arg("--verbose");
+
+    // Resume an existing Claude session for conversation continuity.
+    // The CLI maintains full conversation state — no history prepending needed.
+    if let Some(ref agent_sid) = payload.agent_session_id {
+        cmd.arg("--resume").arg(agent_sid);
+    }
 
     if let Some(ref model) = payload.model {
         cmd.arg("--model").arg(model);

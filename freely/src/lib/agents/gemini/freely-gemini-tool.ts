@@ -13,7 +13,6 @@
 
 import {
   type FreelyExecutionResult,
-  type Message,
   MessageRole,
   type MessageID,
   type PermissionMode,
@@ -26,8 +25,6 @@ import {
 } from '../types.js';
 
 import type {
-  LocalStorageMessagesRepository,
-  LocalStorageMessagesService,
   LocalStorageSessionsRepository,
   LocalStorageTasksService,
 } from '../storage-adapter.js';
@@ -78,9 +75,7 @@ export class FreelyGeminiTool {
   }
 
   constructor(
-    private readonly messagesService: LocalStorageMessagesService,
     private readonly tasksService: LocalStorageTasksService,
-    private readonly messagesRepo: LocalStorageMessagesRepository,
     private readonly sessionsRepo: LocalStorageSessionsRepository
   ) {}
 
@@ -124,24 +119,7 @@ export class FreelyGeminiTool {
   ): Promise<FreelyExecutionResult> {
     const apiKey = this.apiKey; // null = use OAuth (gemini login)
 
-    // Get next message index
-    const existingMessages = await this.messagesRepo.findBySessionId(sessionId);
-    let nextIndex = existingMessages.length;
-
-    // Create and persist user message
     const userMessageId = toMessageID(generateId());
-    const userMessage: Message = {
-      message_id: userMessageId,
-      session_id: sessionId,
-      type: 'user',
-      role: MessageRole.USER,
-      index: nextIndex++,
-      timestamp: new Date().toISOString(),
-      content_preview: prompt.substring(0, 200),
-      content: prompt,
-      task_id: taskId,
-    };
-    await this.messagesService.create(userMessage);
 
     // Ensure session record exists
     await this.sessionsRepo.ensureSession(sessionId, this.toolType);
@@ -203,19 +181,6 @@ export class FreelyGeminiTool {
         await this.tasksService.patch(taskId, { model: resolvedModel });
       }
 
-      const assistantMessage: Message = {
-        message_id: assistantMessageId,
-        session_id: sessionId,
-        type: 'assistant',
-        role: MessageRole.ASSISTANT,
-        index: nextIndex++,
-        timestamp: new Date().toISOString(),
-        content_preview: responseText.substring(0, 200),
-        content: responseText,
-        task_id: taskId,
-        metadata: { model: resolvedModel },
-      };
-      await this.messagesService.create(assistantMessage);
       assistantMessageIds.push(assistantMessageId);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);

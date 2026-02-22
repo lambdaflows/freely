@@ -1,107 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  LocalStorageMessagesService,
   LocalStorageTasksService,
   LocalStorageSessionsService,
-  LocalStorageMessagesRepository,
   LocalStorageSessionsRepository,
   createStorageAdapter,
   getProviderVariable,
   setProviderVariable,
 } from '../storage-adapter.js';
-import { generateId, toMessageID, toSessionID, toTaskID } from '../types.js';
-import type { Message } from '../types.js';
-
-function makeMessage(sessionId: string, overrides: Partial<Message> = {}): Message {
-  return {
-    message_id: toMessageID(generateId()),
-    session_id: toSessionID(sessionId),
-    type: 'user',
-    role: 'user',
-    index: 0,
-    timestamp: new Date().toISOString(),
-    content_preview: 'Hello',
-    content: 'Hello',
-    ...overrides,
-  };
-}
-
-// ============================================================================
-// LocalStorageMessagesService
-// ============================================================================
-
-describe('LocalStorageMessagesService', () => {
-  let service: LocalStorageMessagesService;
-
-  beforeEach(() => {
-    localStorage.clear();
-    service = new LocalStorageMessagesService();
-  });
-
-  it('persists a message to localStorage', async () => {
-    const sessionId = generateId();
-    const message = makeMessage(sessionId);
-    await service.create(message);
-
-    const key = `freely_agents_messages_${sessionId}`;
-    const stored = JSON.parse(localStorage.getItem(key)!);
-    expect(stored).toHaveLength(1);
-    expect(stored[0].message_id).toBe(message.message_id);
-  });
-
-  it('returns the created message', async () => {
-    const sessionId = generateId();
-    const message = makeMessage(sessionId);
-    const result = await service.create(message);
-    expect(result).toEqual(message);
-  });
-
-  it('throws if message_id is missing', async () => {
-    const msg = { session_id: 'sess-1' } as unknown as Message;
-    await expect(service.create(msg)).rejects.toThrow('message_id and session_id are required');
-  });
-
-  it('throws if session_id is missing', async () => {
-    const msg = { message_id: 'msg-1' } as unknown as Message;
-    await expect(service.create(msg)).rejects.toThrow('message_id and session_id are required');
-  });
-
-  it('dispatches freely:message:created CustomEvent', async () => {
-    const sessionId = generateId();
-    const message = makeMessage(sessionId);
-    const handler = vi.fn();
-    window.addEventListener('freely:message:created', handler);
-
-    await service.create(message);
-    window.removeEventListener('freely:message:created', handler);
-
-    expect(handler).toHaveBeenCalledOnce();
-    const event = handler.mock.calls[0][0] as CustomEvent;
-    expect(event.detail.message_id).toBe(message.message_id);
-  });
-
-  it('updates an existing message (idempotent create)', async () => {
-    const sessionId = generateId();
-    const message = makeMessage(sessionId);
-    await service.create(message);
-    await service.create({ ...message, content: 'Updated content' });
-
-    const key = `freely_agents_messages_${sessionId}`;
-    const stored = JSON.parse(localStorage.getItem(key)!);
-    expect(stored).toHaveLength(1);
-    expect(stored[0].content).toBe('Updated content');
-  });
-
-  it('appends distinct messages to the same session', async () => {
-    const sessionId = generateId();
-    await service.create(makeMessage(sessionId, { index: 0 }));
-    await service.create(makeMessage(sessionId, { index: 1 }));
-
-    const key = `freely_agents_messages_${sessionId}`;
-    const stored = JSON.parse(localStorage.getItem(key)!);
-    expect(stored).toHaveLength(2);
-  });
-});
+import { generateId, toSessionID, toTaskID } from '../types.js';
 
 // ============================================================================
 // LocalStorageTasksService
@@ -200,73 +106,6 @@ describe('LocalStorageSessionsService', () => {
     await service.patch('sess-1', {});
     window.removeEventListener('freely:session:updated', handler);
     expect(handler).toHaveBeenCalledOnce();
-  });
-});
-
-// ============================================================================
-// LocalStorageMessagesRepository
-// ============================================================================
-
-describe('LocalStorageMessagesRepository', () => {
-  let repo: LocalStorageMessagesRepository;
-
-  beforeEach(() => {
-    localStorage.clear();
-    repo = new LocalStorageMessagesRepository();
-  });
-
-  it('returns empty array for unknown session', async () => {
-    const messages = await repo.findBySessionId(toSessionID('unknown'));
-    expect(messages).toEqual([]);
-  });
-
-  it('create persists message and findBySessionId retrieves it', async () => {
-    const sessionId = generateId();
-    const message = makeMessage(sessionId);
-    await repo.create(message);
-
-    const found = await repo.findBySessionId(toSessionID(sessionId));
-    expect(found).toHaveLength(1);
-    expect(found[0].message_id).toBe(message.message_id);
-  });
-
-  it('create returns the message', async () => {
-    const sessionId = generateId();
-    const message = makeMessage(sessionId);
-    const result = await repo.create(message);
-    expect(result).toEqual(message);
-  });
-
-  it('create is idempotent (updates existing message)', async () => {
-    const sessionId = generateId();
-    const message = makeMessage(sessionId);
-    await repo.create(message);
-    await repo.create({ ...message, content: 'Changed' });
-
-    const found = await repo.findBySessionId(toSessionID(sessionId));
-    expect(found).toHaveLength(1);
-    expect(found[0].content).toBe('Changed');
-  });
-
-  it('stores multiple distinct messages for the same session', async () => {
-    const sessionId = generateId();
-    await repo.create(makeMessage(sessionId, { index: 0 }));
-    await repo.create(makeMessage(sessionId, { index: 1 }));
-    await repo.create(makeMessage(sessionId, { index: 2 }));
-
-    const found = await repo.findBySessionId(toSessionID(sessionId));
-    expect(found).toHaveLength(3);
-  });
-
-  it('isolates messages by session', async () => {
-    const sessionA = generateId();
-    const sessionB = generateId();
-    await repo.create(makeMessage(sessionA));
-    await repo.create(makeMessage(sessionA));
-    await repo.create(makeMessage(sessionB));
-
-    expect(await repo.findBySessionId(toSessionID(sessionA))).toHaveLength(2);
-    expect(await repo.findBySessionId(toSessionID(sessionB))).toHaveLength(1);
   });
 });
 
@@ -370,10 +209,8 @@ describe('getProviderVariable / setProviderVariable', () => {
 describe('createStorageAdapter', () => {
   it('returns all service and repository instances', () => {
     const adapter = createStorageAdapter();
-    expect(adapter.messagesService).toBeInstanceOf(LocalStorageMessagesService);
     expect(adapter.tasksService).toBeInstanceOf(LocalStorageTasksService);
     expect(adapter.sessionsService).toBeInstanceOf(LocalStorageSessionsService);
-    expect(adapter.messagesRepository).toBeInstanceOf(LocalStorageMessagesRepository);
     expect(adapter.sessionsRepository).toBeInstanceOf(LocalStorageSessionsRepository);
   });
 });

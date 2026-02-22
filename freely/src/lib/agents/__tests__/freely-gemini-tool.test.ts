@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FreelyGeminiTool } from '../gemini/freely-gemini-tool.js';
 import {
-  LocalStorageMessagesService,
   LocalStorageTasksService,
-  LocalStorageMessagesRepository,
   LocalStorageSessionsRepository,
   setProviderVariable,
 } from '../storage-adapter.js';
@@ -12,9 +10,7 @@ import type { StreamingCallbacks } from '../types.js';
 
 function makeTool() {
   return new FreelyGeminiTool(
-    new LocalStorageMessagesService(),
     new LocalStorageTasksService(),
-    new LocalStorageMessagesRepository(),
     new LocalStorageSessionsRepository()
   );
 }
@@ -111,16 +107,6 @@ describe('FreelyGeminiTool.executePromptWithStreaming — non-Tauri context', ()
 
   afterEach(() => {
     delete (window as any).__TAURI_INTERNALS__;
-  });
-
-  it('persists user message to localStorage', async () => {
-    const sessionId = toSessionID(generateId());
-    await makeTool().executePromptWithStreaming(sessionId, 'Hello Gemini!');
-
-    const key = `freely_agents_messages_${sessionId}`;
-    const messages = JSON.parse(localStorage.getItem(key)!);
-    expect(messages[0].role).toBe('user');
-    expect(messages[0].content).toBe('Hello Gemini!');
   });
 
   it('returns Tauri placeholder result', async () => {
@@ -228,26 +214,6 @@ describe('FreelyGeminiTool.executePromptWithStreaming — Tauri context', () => 
       'Prompt'
     );
     expect(result.responseText).toBe('Gemini rocks');
-  });
-
-  it('persists both user and assistant messages', async () => {
-    (window as any).__TAURI_INTERNALS__ = {
-      invoke: vi.fn().mockResolvedValue([
-        { type: 'partial', textChunk: 'Gemini response' },
-        { type: 'complete' },
-      ]),
-    };
-
-    const sessionId = toSessionID(generateId());
-    const result = await makeTool().executePromptWithStreaming(sessionId, 'Test');
-
-    const key = `freely_agents_messages_${sessionId}`;
-    const messages = JSON.parse(localStorage.getItem(key)!);
-    expect(messages).toHaveLength(2);
-    expect(messages[0].role).toBe('user');
-    expect(messages[1].role).toBe('assistant');
-    expect(messages[1].content).toBe('Gemini response');
-    expect(result.assistantMessageIds).toHaveLength(1);
   });
 
   it('captures resolvedModel from events', async () => {

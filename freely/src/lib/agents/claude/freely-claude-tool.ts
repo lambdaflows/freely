@@ -15,7 +15,6 @@
 import {
   type FreelyExecutionResult,
   type ImportOptions,
-  type Message,
   MessageRole,
   type MessageID,
   type PermissionMode,
@@ -28,8 +27,6 @@ import {
 } from '../types.js';
 
 import type {
-  LocalStorageMessagesRepository,
-  LocalStorageMessagesService,
   LocalStorageSessionsRepository,
   LocalStorageSessionsService,
   LocalStorageTasksService,
@@ -57,6 +54,8 @@ interface ClaudeInvokePayload {
   permissionMode?: string;
   workingDirectory?: string;
   model?: string;
+  /** Claude CLI session ID for --resume continuity */
+  agentSessionId?: string;
 }
 
 /**
@@ -97,12 +96,10 @@ export class FreelyClaudeTool {
   readonly name = 'Claude Code';
 
   constructor(
-    private readonly messagesService: LocalStorageMessagesService,
     /** Reserved for future task status updates */
     _tasksService: LocalStorageTasksService,
     /** Reserved for future session patch calls */
     _sessionsService: LocalStorageSessionsService,
-    private readonly messagesRepo: LocalStorageMessagesRepository,
     private readonly sessionsRepo: LocalStorageSessionsRepository
   ) {}
 
@@ -145,24 +142,7 @@ export class FreelyClaudeTool {
     _abortController?: AbortController,
     model?: string
   ): Promise<FreelyExecutionResult> {
-    // Get next message index
-    const existingMessages = await this.messagesRepo.findBySessionId(sessionId);
-    let nextIndex = existingMessages.length;
-
-    // Create and persist user message
     const userMessageId = toMessageID(generateId());
-    const userMessage: Message = {
-      message_id: userMessageId,
-      session_id: sessionId,
-      type: 'user',
-      role: MessageRole.USER,
-      index: nextIndex++,
-      timestamp: new Date().toISOString(),
-      content_preview: prompt.substring(0, 200),
-      content: prompt,
-      task_id: taskId,
-    };
-    await this.messagesService.create(userMessage);
 
     // Ensure session record exists
     await this.sessionsRepo.ensureSession(sessionId, this.toolType);
@@ -196,12 +176,19 @@ export class FreelyClaudeTool {
         });
       }
 
+      // Look up existing Claude CLI session ID for --resume continuity.
+      // On the first call this is undefined (new session); on subsequent calls
+      // the CLI's own session ID is used to resume with full conversation state.
+      const existingSession = await this.sessionsRepo.findById(sessionId);
+      const agentSessionId = existingSession?.sdk_session_id;
+
       const payload: ClaudeInvokePayload = {
         sessionId,
         prompt,
         taskId,
         permissionMode,
         model,
+        agentSessionId,
       };
 
       // Listen for real-time streaming events from the Rust backend
@@ -244,20 +231,6 @@ export class FreelyClaudeTool {
         }
       }
 
-      // Persist the complete assistant message
-      const assistantMessage: Message = {
-        message_id: assistantMessageId,
-        session_id: sessionId,
-        type: 'assistant',
-        role: MessageRole.ASSISTANT,
-        index: nextIndex++,
-        timestamp: new Date().toISOString(),
-        content_preview: responseText.substring(0, 200),
-        content: responseText,
-        task_id: taskId,
-        metadata: { model: resolvedModel },
-      };
-      await this.messagesService.create(assistantMessage);
       assistantMessageIds.push(assistantMessageId);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);

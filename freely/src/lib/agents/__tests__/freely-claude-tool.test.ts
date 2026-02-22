@@ -1,21 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FreelyClaudeTool } from '../claude/freely-claude-tool.js';
 import {
-  LocalStorageMessagesService,
   LocalStorageTasksService,
   LocalStorageSessionsService,
-  LocalStorageMessagesRepository,
   LocalStorageSessionsRepository,
 } from '../storage-adapter.js';
-import { generateId, toMessageID, toSessionID, toTaskID } from '../types.js';
+import { generateId, toSessionID } from '../types.js';
 import type { StreamingCallbacks } from '../types.js';
 
 function makeTool() {
   return new FreelyClaudeTool(
-    new LocalStorageMessagesService(),
     new LocalStorageTasksService(),
     new LocalStorageSessionsService(),
-    new LocalStorageMessagesRepository(),
     new LocalStorageSessionsRepository()
   );
 }
@@ -127,18 +123,6 @@ describe('FreelyClaudeTool.executePromptWithStreaming — non-Tauri context', ()
     delete (window as any).__TAURI_INTERNALS__;
   });
 
-  it('persists a user message to localStorage', async () => {
-    const tool = makeTool();
-    const sessionId = toSessionID(generateId());
-    await tool.executePromptWithStreaming(sessionId, 'Hello Claude!');
-
-    const key = `freely_agents_messages_${sessionId}`;
-    const messages = JSON.parse(localStorage.getItem(key)!);
-    expect(messages).toHaveLength(1);
-    expect(messages[0].role).toBe('user');
-    expect(messages[0].content).toBe('Hello Claude!');
-  });
-
   it('returns a placeholder result with no assistant messages', async () => {
     const tool = makeTool();
     const result = await tool.executePromptWithStreaming(
@@ -165,29 +149,6 @@ describe('FreelyClaudeTool.executePromptWithStreaming — non-Tauri context', ()
     expect(cbs.onStreamChunk).not.toHaveBeenCalled();
     expect(cbs.onStreamEnd).not.toHaveBeenCalled();
     expect(cbs.onStreamError).not.toHaveBeenCalled();
-  });
-
-  it('truncates long prompts in content_preview (max 200 chars)', async () => {
-    const tool = makeTool();
-    const sessionId = toSessionID(generateId());
-    const longPrompt = 'x'.repeat(300);
-    await tool.executePromptWithStreaming(sessionId, longPrompt);
-
-    const key = `freely_agents_messages_${sessionId}`;
-    const messages = JSON.parse(localStorage.getItem(key)!);
-    expect(messages[0].content_preview.length).toBe(200);
-    expect(messages[0].content.length).toBe(300);
-  });
-
-  it('attaches task_id to user message when provided', async () => {
-    const tool = makeTool();
-    const sessionId = toSessionID(generateId());
-    const taskId = toTaskID(generateId());
-    await tool.executePromptWithStreaming(sessionId, 'Hello', taskId);
-
-    const key = `freely_agents_messages_${sessionId}`;
-    const messages = JSON.parse(localStorage.getItem(key)!);
-    expect(messages[0].task_id).toBe(taskId);
   });
 
   it('creates session record in sessionsRepo', async () => {
@@ -267,28 +228,6 @@ describe('FreelyClaudeTool.executePromptWithStreaming — Tauri context', () => 
     );
 
     expect(result.responseText).toBe('Hello world');
-  });
-
-  it('persists user message and assistant message', async () => {
-    (window as any).__TAURI_INTERNALS__ = {
-      invoke: vi.fn().mockResolvedValue([
-        { type: 'partial', textChunk: 'Response text' },
-        { type: 'complete' },
-      ]),
-    };
-
-    const tool = makeTool();
-    const sessionId = toSessionID(generateId());
-    const result = await tool.executePromptWithStreaming(sessionId, 'Test prompt');
-
-    const key = `freely_agents_messages_${sessionId}`;
-    const messages = JSON.parse(localStorage.getItem(key)!);
-    expect(messages).toHaveLength(2);
-    expect(messages[0].role).toBe('user');
-    expect(messages[1].role).toBe('assistant');
-    expect(messages[1].content).toBe('Response text');
-    expect(result.assistantMessageIds).toHaveLength(1);
-    expect(result.assistantMessageIds[0]).toBe(messages[1].message_id);
   });
 
   it('captures resolvedModel from events', async () => {

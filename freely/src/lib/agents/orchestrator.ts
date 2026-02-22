@@ -7,10 +7,8 @@
  *
  * Architecture:
  * - Each provider is backed by a Freely tool adapter (FreelyClaudeTool, etc.)
- * - Tool adapters use localStorage for session/message persistence
- * - Claude: uses `claude login` OAuth, no API key required
- * - Codex: reads OPENAI_API_KEY from localStorage provider variables
- * - Gemini: reads GOOGLE_API_KEY from localStorage provider variables
+ * - Claude: uses `--resume` for session continuity (no history prepending needed)
+ * - Codex/Gemini: use history injection as fallback (CLIs lack resume support)
  * - Actual CLI execution happens via Tauri invoke → Rust sidecar
  */
 
@@ -60,24 +58,18 @@ export class FreelyAgentOrchestrator {
     this.storage = storage ?? createStorageAdapter();
 
     this.claudeTool = new FreelyClaudeTool(
-      this.storage.messagesService,
       this.storage.tasksService,
       this.storage.sessionsService,
-      this.storage.messagesRepository,
       this.storage.sessionsRepository
     );
 
     this.codexTool = new FreelyCodexTool(
-      this.storage.messagesService,
       this.storage.tasksService,
-      this.storage.messagesRepository,
       this.storage.sessionsRepository
     );
 
     this.geminiTool = new FreelyGeminiTool(
-      this.storage.messagesService,
       this.storage.tasksService,
-      this.storage.messagesRepository,
       this.storage.sessionsRepository
     );
   }
@@ -110,7 +102,22 @@ export class FreelyAgentOrchestrator {
   }
 
   // ---------------------------------------------------------------------------
-  // Claude Code — uses `claude login` OAuth, no API key
+  // History injection fallback for CLIs that lack --resume (Codex, Gemini).
+  // Claude uses --resume instead, so this is NOT used for Claude.
+  // ---------------------------------------------------------------------------
+  private buildPromptWithHistory(params: AgentExecuteParams): string {
+    if (!params.history?.length) return params.userMessage;
+
+    const historyBlock = params.history
+      .slice(-20) // Last 20 messages max to avoid token overflow
+      .map((m) => `[${m.role}]: ${m.content}`)
+      .join('\n\n');
+
+    return `<conversation_history>\n${historyBlock}\n</conversation_history>\n\n${params.userMessage}`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Claude Code — uses `--resume` for session continuity, no history prepending
   // ---------------------------------------------------------------------------
   private async *executeClaudeCode(params: AgentExecuteParams): AsyncIterable<string> {
     if (params.signal?.aborted) return;
@@ -128,6 +135,7 @@ export class FreelyAgentOrchestrator {
     }
 
     function finish(err?: Error) {
+      if (done) return; // Prevent double-finish
       done = true;
       errorThrown = err ?? null;
       waiters.shift()?.();
@@ -135,20 +143,26 @@ export class FreelyAgentOrchestrator {
 
     const callbacks = buildStreamingCallbacks(enqueue, finish, params.signal);
 
-    // Fire execution in the background; yield chunks as they arrive
-    this.claudeTool
-      .executePromptWithStreaming(sessionId, params.userMessage, undefined, undefined, callbacks, undefined, params.model)
-      .then((result) => {
-        if (result.error) finish(new Error(result.error));
-        else finish();
-      })
-      .catch((err: unknown) => finish(err instanceof Error ? err : new Error(String(err))));
+    // Claude uses --resume with the CLI's own session ID for conversation continuity.
+    // Only the current userMessage is sent — Claude CLI maintains full history internally.
+    try {
+      this.claudeTool
+        .executePromptWithStreaming(sessionId, params.userMessage, undefined, undefined, callbacks, undefined, params.model)
+        .then((result) => {
+          if (result.error) finish(new Error(result.error));
+          else finish();
+        })
+        .catch((err: unknown) => finish(err instanceof Error ? err : new Error(String(err))));
+    } catch (err) {
+      finish(err instanceof Error ? err : new Error(String(err)));
+    }
 
     yield* drainQueue(queue, waiters, () => done, () => errorThrown, params.signal);
   }
 
   // ---------------------------------------------------------------------------
   // OpenAI Codex — reads OPENAI_API_KEY from params or localStorage
+  // Uses history injection (no --resume equivalent)
   // ---------------------------------------------------------------------------
   private async *executeCodex(params: AgentExecuteParams): AsyncIterable<string> {
     if (params.signal?.aborted) return;
@@ -161,6 +175,7 @@ export class FreelyAgentOrchestrator {
     }
 
     const sessionId = toSessionID(params.sessionId ?? generateId());
+    const prompt = this.buildPromptWithHistory(params);
     const queue: string[] = [];
     const waiters: Array<() => void> = [];
     let done = false;
@@ -172,6 +187,7 @@ export class FreelyAgentOrchestrator {
     }
 
     function finish(err?: Error) {
+      if (done) return;
       done = true;
       errorThrown = err ?? null;
       waiters.shift()?.();
@@ -179,25 +195,31 @@ export class FreelyAgentOrchestrator {
 
     const callbacks = buildStreamingCallbacks(enqueue, finish, params.signal);
 
-    this.codexTool
-      .executePromptWithStreaming(sessionId, params.userMessage, undefined, undefined, callbacks)
-      .then((result) => {
-        if (result.error) finish(new Error(result.error));
-        else finish();
-      })
-      .catch((err: unknown) => finish(err instanceof Error ? err : new Error(String(err))));
+    try {
+      this.codexTool
+        .executePromptWithStreaming(sessionId, prompt, undefined, undefined, callbacks)
+        .then((result) => {
+          if (result.error) finish(new Error(result.error));
+          else finish();
+        })
+        .catch((err: unknown) => finish(err instanceof Error ? err : new Error(String(err))));
+    } catch (err) {
+      finish(err instanceof Error ? err : new Error(String(err)));
+    }
 
     yield* drainQueue(queue, waiters, () => done, () => errorThrown, params.signal);
   }
 
   // ---------------------------------------------------------------------------
   // Google Gemini SDK — reads GOOGLE_API_KEY from params or localStorage
+  // Uses history injection (no --resume equivalent)
   // ---------------------------------------------------------------------------
   private async *executeGeminiSdk(params: AgentExecuteParams): AsyncIterable<string> {
     if (params.signal?.aborted) return;
 
     // Gemini can operate with OAuth login even without an API key
     const sessionId = toSessionID(params.sessionId ?? generateId());
+    const prompt = this.buildPromptWithHistory(params);
     const queue: string[] = [];
     const waiters: Array<() => void> = [];
     let done = false;
@@ -209,6 +231,7 @@ export class FreelyAgentOrchestrator {
     }
 
     function finish(err?: Error) {
+      if (done) return;
       done = true;
       errorThrown = err ?? null;
       waiters.shift()?.();
@@ -216,13 +239,17 @@ export class FreelyAgentOrchestrator {
 
     const callbacks = buildStreamingCallbacks(enqueue, finish, params.signal);
 
-    this.geminiTool
-      .executePromptWithStreaming(sessionId, params.userMessage, undefined, undefined, callbacks)
-      .then((result) => {
-        if (result.error) finish(new Error(result.error));
-        else finish();
-      })
-      .catch((err: unknown) => finish(err instanceof Error ? err : new Error(String(err))));
+    try {
+      this.geminiTool
+        .executePromptWithStreaming(sessionId, prompt, undefined, undefined, callbacks)
+        .then((result) => {
+          if (result.error) finish(new Error(result.error));
+          else finish();
+        })
+        .catch((err: unknown) => finish(err instanceof Error ? err : new Error(String(err))));
+    } catch (err) {
+      finish(err instanceof Error ? err : new Error(String(err)));
+    }
 
     yield* drainQueue(queue, waiters, () => done, () => errorThrown, params.signal);
   }

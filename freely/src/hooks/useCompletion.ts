@@ -218,6 +218,7 @@ export const useCompletion = () => {
             userMessage: input,
             imagesBase64,
             signal,
+            conversationId: state.currentConversationId || undefined,
           })) {
             // Only update if this is still the current request
             if (currentRequestIdRef.current !== requestId) {
@@ -621,6 +622,7 @@ export const useCompletion = () => {
               userMessage: prompt,
               imagesBase64: [base64],
               signal,
+              conversationId: state.currentConversationId || undefined,
             })) {
               // Only update if this is still the current request
               if (currentRequestIdRef.current !== requestId || signal.aborted) {

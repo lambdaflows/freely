@@ -7,9 +7,7 @@
  */
 
 import type {
-  IMessagesRepository,
   ISessionsRepository,
-  Message,
   SessionID,
   TaskID,
 } from './types.js';
@@ -21,7 +19,6 @@ import type {
 const AGENTS_STORAGE_PREFIX = 'freely_agents_';
 
 const STORAGE_KEYS = {
-  messages: (sessionId: string) => `${AGENTS_STORAGE_PREFIX}messages_${sessionId}`,
   session: (sessionId: string) => `${AGENTS_STORAGE_PREFIX}session_${sessionId}`,
   task: (taskId: string) => `${AGENTS_STORAGE_PREFIX}task_${taskId}`,
 } as const;
@@ -43,52 +40,6 @@ function writeJson<T>(key: string, value: T): void {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
     console.error(`[FreelyStorage] Failed to write key "${key}":`, err);
-  }
-}
-
-// ============================================================================
-// MessagesService
-//
-// Service interface matching claude-tool.ts MessagesService.
-// Emits messages via a custom DOM event so Freely UI can react to new messages.
-// ============================================================================
-
-export interface MessagesService {
-  create(data: Partial<Message>): Promise<Message>;
-}
-
-export class LocalStorageMessagesService implements MessagesService {
-  /**
-   * Persist a message to localStorage and dispatch a DOM event.
-   * The event 'freely:message:created' carries the message as detail.
-   */
-  async create(data: Partial<Message>): Promise<Message> {
-    if (!data.message_id || !data.session_id) {
-      throw new Error('MessagesService.create: message_id and session_id are required');
-    }
-
-    const message = data as Message;
-    const key = STORAGE_KEYS.messages(message.session_id);
-    const existing = readJson<Message[]>(key, []);
-
-    // Avoid duplicates (idempotent create)
-    const idx = existing.findIndex((m) => m.message_id === message.message_id);
-    if (idx >= 0) {
-      existing[idx] = message;
-    } else {
-      existing.push(message);
-    }
-
-    writeJson(key, existing);
-
-    // Notify Freely UI via CustomEvent (replaces FeathersJS WebSocket broadcast)
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('freely:message:created', { detail: message })
-      );
-    }
-
-    return message;
   }
 }
 
@@ -219,34 +170,6 @@ export class LocalStorageSessionsService implements SessionsService {
 }
 
 // ============================================================================
-// MessagesRepository
-//
-// Implements IMessagesRepository interface for use inside tool adapters.
-// ============================================================================
-
-export class LocalStorageMessagesRepository implements IMessagesRepository {
-  async findBySessionId(sessionId: SessionID): Promise<Message[]> {
-    const key = STORAGE_KEYS.messages(sessionId);
-    return readJson<Message[]>(key, []);
-  }
-
-  async create(message: Message): Promise<Message> {
-    const key = STORAGE_KEYS.messages(message.session_id);
-    const existing = readJson<Message[]>(key, []);
-
-    const idx = existing.findIndex((m) => m.message_id === message.message_id);
-    if (idx >= 0) {
-      existing[idx] = message;
-    } else {
-      existing.push(message);
-    }
-
-    writeJson(key, existing);
-    return message;
-  }
-}
-
-// ============================================================================
 // SessionsRepository
 //
 // Implements ISessionsRepository interface for use inside tool adapters.
@@ -307,20 +230,16 @@ export class LocalStorageSessionsRepository implements ISessionsRepository {
 // ============================================================================
 
 export interface FreelyStorageAdapter {
-  messagesService: LocalStorageMessagesService;
   tasksService: LocalStorageTasksService;
   sessionsService: LocalStorageSessionsService;
-  messagesRepository: LocalStorageMessagesRepository;
   sessionsRepository: LocalStorageSessionsRepository;
 }
 
 /** Create a fully wired localStorage storage adapter for Freely agents. */
 export function createStorageAdapter(): FreelyStorageAdapter {
   return {
-    messagesService: new LocalStorageMessagesService(),
     tasksService: new LocalStorageTasksService(),
     sessionsService: new LocalStorageSessionsService(),
-    messagesRepository: new LocalStorageMessagesRepository(),
     sessionsRepository: new LocalStorageSessionsRepository(),
   };
 }

@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FreelyCodexTool } from '../codex/freely-codex-tool.js';
 import {
-  LocalStorageMessagesService,
   LocalStorageTasksService,
-  LocalStorageMessagesRepository,
   LocalStorageSessionsRepository,
   setProviderVariable,
 } from '../storage-adapter.js';
@@ -12,9 +10,7 @@ import type { StreamingCallbacks } from '../types.js';
 
 function makeTool() {
   return new FreelyCodexTool(
-    new LocalStorageMessagesService(),
     new LocalStorageTasksService(),
-    new LocalStorageMessagesRepository(),
     new LocalStorageSessionsRepository()
   );
 }
@@ -119,14 +115,6 @@ describe('FreelyCodexTool.executePromptWithStreaming — missing API key', () =>
     expect(result.assistantMessageIds).toEqual([]);
   });
 
-  it('does NOT persist a user message when API key is missing', async () => {
-    const sessionId = toSessionID(generateId());
-    await makeTool().executePromptWithStreaming(sessionId, 'Hello');
-
-    const key = `freely_agents_messages_${sessionId}`;
-    expect(localStorage.getItem(key)).toBeNull();
-  });
-
   it('does NOT invoke streaming callbacks when API key is missing', async () => {
     const cbs = makeCallbacks();
     await makeTool().executePromptWithStreaming(
@@ -154,16 +142,6 @@ describe('FreelyCodexTool.executePromptWithStreaming — non-Tauri context', () 
 
   afterEach(() => {
     delete (window as any).__TAURI_INTERNALS__;
-  });
-
-  it('persists user message to localStorage', async () => {
-    const sessionId = toSessionID(generateId());
-    await makeTool().executePromptWithStreaming(sessionId, 'Hello Codex!');
-
-    const key = `freely_agents_messages_${sessionId}`;
-    const messages = JSON.parse(localStorage.getItem(key)!);
-    expect(messages[0].role).toBe('user');
-    expect(messages[0].content).toBe('Hello Codex!');
   });
 
   it('returns Tauri placeholder result', async () => {
