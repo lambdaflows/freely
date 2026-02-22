@@ -105,7 +105,9 @@ pub async fn start_system_audio_capture(
         .map_err(|e| format!("Failed to set capturing state: {}", e))? = true;
 
     // Emit capture started event
-    let _ = app_clone.emit("capture-started", sr);
+    if let Err(e) = app_clone.emit("capture-started", sr) {
+        warn!("Failed to emit capture-started: {}", e);
+    }
 
     let state_clone = app.state::<crate::AudioState>();
     let task = tokio::spawn(async move {
