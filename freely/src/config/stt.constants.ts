@@ -55,7 +55,7 @@ export const SPEECH_TO_TEXT_PROVIDERS = [
   {
     id: "deepgram-stt",
     name: "Deepgram Speech-to-Text",
-    curl: `curl -X POST "https://api.deepgram.com/v1/listen?model={{MODEL}}" \\
+    curl: `curl -X POST "https://api.deepgram.com/v1/listen?model={{MODEL}}&encoding=linear16&sample_rate=16000&channels=1&smart_format=true&punctuate=true" \\
       -H "Authorization: TOKEN {{API_KEY}}" \\
       -H "Content-Type: audio/wav" \\
       --data-binary {{AUDIO}}`,
