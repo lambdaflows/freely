@@ -8,6 +8,51 @@ import {
 import { generateId, toSessionID } from '../types.js';
 import type { StreamingCallbacks } from '../types.js';
 
+// ---------------------------------------------------------------------------
+// Mock @tauri-apps/api/core and @tauri-apps/api/event
+// ---------------------------------------------------------------------------
+// The Claude tool uses tauriListen (event.listen) for streaming and tauriInvoke
+// (core.invoke) to start the process. We mock both modules so that:
+// 1. listen() captures the handler for a given event name
+// 2. invoke() fires the captured handler with each event from mockTauriEvents
+// ---------------------------------------------------------------------------
+
+/** Events that mockInvoke will emit through the listener */
+let mockTauriEvents: any[] = [];
+/** Whether mockInvoke should reject */
+let mockInvokeError: Error | null = null;
+/** Captured event listeners: eventName → handler */
+const eventListeners = new Map<string, (payload: any) => void>();
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(async (eventName: string, handler: (ev: { payload: any }) => void) => {
+    // Store the raw payload handler (unwrap the {payload} envelope)
+    eventListeners.set(eventName, (payload: any) => handler({ payload }));
+    // Return unlisten function
+    return () => { eventListeners.delete(eventName); };
+  }),
+}));
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(async (_command: string, args?: any) => {
+    if (mockInvokeError) throw mockInvokeError;
+
+    // Find the listener for this session's event channel
+    const sessionId = args?.payload?.sessionId;
+    const eventName = `agent:stream:${sessionId}`;
+    const handler = eventListeners.get(eventName);
+
+    // Fire each mock event through the listener
+    if (handler && mockTauriEvents.length > 0) {
+      for (const event of mockTauriEvents) {
+        handler(event);
+      }
+    }
+
+    return undefined;
+  }),
+}));
+
 function makeTool() {
   return new FreelyClaudeTool(
     new LocalStorageTasksService(),
@@ -164,27 +209,29 @@ describe('FreelyClaudeTool.executePromptWithStreaming — non-Tauri context', ()
 });
 
 // ============================================================================
-// executePromptWithStreaming — Tauri context (mocked via window.__TAURI_INTERNALS__)
+// executePromptWithStreaming — Tauri context (mocked via vi.mock)
 // ============================================================================
 
 describe('FreelyClaudeTool.executePromptWithStreaming — Tauri context', () => {
   beforeEach(() => {
     localStorage.clear();
-    delete (window as any).__TAURI_INTERNALS__;
+    mockTauriEvents = [];
+    mockInvokeError = null;
+    eventListeners.clear();
+    // Set __TAURI__ sentinel so tauriInvoke detects Tauri context
+    (window as any).__TAURI__ = true;
   });
 
   afterEach(() => {
+    delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
   });
 
   it('calls onStreamStart → onStreamChunk (×n) → onStreamEnd in order', async () => {
-    (window as any).__TAURI_INTERNALS__ = {
-      invoke: vi.fn().mockResolvedValue([
-        { type: 'partial', textChunk: 'chunk1' },
-        { type: 'partial', textChunk: 'chunk2' },
-        { type: 'complete' },
-      ]),
-    };
+    mockTauriEvents = [
+      { type: 'partial', textChunk: 'chunk1' },
+      { type: 'partial', textChunk: 'chunk2' },
+    ];
 
     const tool = makeTool();
     const order: string[] = [];
@@ -213,13 +260,10 @@ describe('FreelyClaudeTool.executePromptWithStreaming — Tauri context', () => 
   });
 
   it('accumulates chunks into responseText', async () => {
-    (window as any).__TAURI_INTERNALS__ = {
-      invoke: vi.fn().mockResolvedValue([
-        { type: 'partial', textChunk: 'Hello' },
-        { type: 'partial', textChunk: ' world' },
-        { type: 'complete' },
-      ]),
-    };
+    mockTauriEvents = [
+      { type: 'partial', textChunk: 'Hello' },
+      { type: 'partial', textChunk: ' world' },
+    ];
 
     const tool = makeTool();
     const result = await tool.executePromptWithStreaming(
@@ -231,12 +275,9 @@ describe('FreelyClaudeTool.executePromptWithStreaming — Tauri context', () => 
   });
 
   it('captures resolvedModel from events', async () => {
-    (window as any).__TAURI_INTERNALS__ = {
-      invoke: vi.fn().mockResolvedValue([
-        { type: 'partial', textChunk: 'Hi', resolvedModel: 'claude-opus-4' },
-        { type: 'complete' },
-      ]),
-    };
+    mockTauriEvents = [
+      { type: 'partial', textChunk: 'Hi', resolvedModel: 'claude-opus-4' },
+    ];
 
     const tool = makeTool();
     const result = await tool.executePromptWithStreaming(
@@ -248,12 +289,9 @@ describe('FreelyClaudeTool.executePromptWithStreaming — Tauri context', () => 
   });
 
   it('updates sessionsRepo with agentSessionId', async () => {
-    (window as any).__TAURI_INTERNALS__ = {
-      invoke: vi.fn().mockResolvedValue([
-        { type: 'partial', textChunk: 'Hi', agentSessionId: 'agent-sess-abc' },
-        { type: 'complete' },
-      ]),
-    };
+    mockTauriEvents = [
+      { type: 'partial', textChunk: 'Hi', agentSessionId: 'agent-sess-abc' },
+    ];
 
     const tool = makeTool();
     const sessionId = toSessionID(generateId());
@@ -265,12 +303,10 @@ describe('FreelyClaudeTool.executePromptWithStreaming — Tauri context', () => 
   });
 
   it('calls onStreamError and sets wasStopped when type is "stopped"', async () => {
-    (window as any).__TAURI_INTERNALS__ = {
-      invoke: vi.fn().mockResolvedValue([
-        { type: 'partial', textChunk: 'partial text' },
-        { type: 'stopped' },
-      ]),
-    };
+    mockTauriEvents = [
+      { type: 'partial', textChunk: 'partial text' },
+      { type: 'stopped' },
+    ];
 
     const tool = makeTool();
     const cbs = makeCallbacks();
@@ -288,9 +324,7 @@ describe('FreelyClaudeTool.executePromptWithStreaming — Tauri context', () => 
   });
 
   it('returns error in result when Tauri invoke rejects', async () => {
-    (window as any).__TAURI_INTERNALS__ = {
-      invoke: vi.fn().mockRejectedValue(new Error('Invoke failed')),
-    };
+    mockInvokeError = new Error('Invoke failed');
 
     const tool = makeTool();
     const result = await tool.executePromptWithStreaming(
