@@ -28,6 +28,18 @@ pub struct AgentProcessRegistry(pub Arc<Mutex<HashMap<String, u32>>>);
 
 /// Kill an in-flight agent process for the given session.
 /// If no process is registered (already finished or never started), this is a no-op.
+///
+/// # Security note
+/// `registry.remove()` returns `None` when the session_id is unknown, causing an
+/// early return with no kill. This is safe: the registry only ever holds PIDs that
+/// *we* inserted when spawning a child process, so there is no risk of killing an
+/// arbitrary PID supplied by the frontend.
+///
+/// # Race condition (v1 known limitation)
+/// If `kill_agent_process` fires before `run_cli_process` has had a chance to
+/// register the PID (i.e. between spawn and the `map.insert` call), the remove
+/// returns `None` and the kill is a no-op. The process will continue to run until
+/// it finishes naturally. This window is extremely small and acceptable for v1.
 #[tauri::command]
 pub async fn kill_agent_process(
     registry: tauri::State<'_, AgentProcessRegistry>,
@@ -40,26 +52,35 @@ pub async fn kill_agent_process(
         .remove(&session_id);
 
     if let Some(pid) = pid {
-        kill_pid(pid);
+        kill_pid(pid).await;
     }
     Ok(())
 }
 
 /// Send SIGTERM (Unix) or taskkill (Windows) to the given PID.
+///
+/// Uses `tokio::task::spawn_blocking` to avoid blocking the async executor with
+/// a synchronous `std::process::Command::status()` call.
 #[cfg(unix)]
-fn kill_pid(pid: u32) {
+async fn kill_pid(pid: u32) {
     // SIGTERM for graceful shutdown; the process group is not targeted since
     // CLI tools like `claude` may manage their own child processes.
-    let _ = std::process::Command::new("kill")
-        .args(["-TERM", &pid.to_string()])
-        .status();
+    let _ = tokio::task::spawn_blocking(move || {
+        let _ = std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .status();
+    })
+    .await;
 }
 
 #[cfg(windows)]
-fn kill_pid(pid: u32) {
-    let _ = std::process::Command::new("taskkill")
-        .args(["/F", "/PID", &pid.to_string()])
-        .status();
+async fn kill_pid(pid: u32) {
+    let _ = tokio::task::spawn_blocking(move || {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/PID", &pid.to_string()])
+            .status();
+    })
+    .await;
 }
 
 // ============================================================================
@@ -572,15 +593,18 @@ async fn run_cli_process(
     }
 
     // Wait for process to exit
-    let status = child
+    let wait_result = child
         .wait()
         .await
-        .map_err(|e| format!("Failed to wait for process: {}", e))?;
+        .map_err(|e| format!("Failed to wait for process: {}", e));
 
-    // Deregister PID — process has exited
+    // Deregister PID before propagating any error — avoids a registry leak if
+    // `wait()` returns an OS error (e.g. ECHILD). The process is gone either way.
     if let Ok(mut map) = registry.0.lock() {
         map.remove(session_id);
     }
+
+    let status = wait_result?;
 
     // Collect stderr
     let stderr_output = stderr_handle

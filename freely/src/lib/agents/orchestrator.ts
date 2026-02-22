@@ -30,12 +30,13 @@ import {
 
 /** Invoke a Tauri command — no-op outside of Tauri context */
 async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T | undefined> {
-  if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return undefined;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { invoke } = (window as any).__TAURI_INTERNALS__ as {
-    invoke: (cmd: string, args?: Record<string, unknown>) => Promise<T>;
-  };
-  return invoke(command, args);
+  if (typeof window === 'undefined' || !('__TAURI__' in window)) return undefined;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<T>(command, args);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
