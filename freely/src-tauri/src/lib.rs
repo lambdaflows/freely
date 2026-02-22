@@ -42,6 +42,7 @@ pub fn run() {
         )
         .manage(AudioState::default())
         .manage(CaptureState::default())
+        .manage(agents::AgentProcessRegistry::default())
         .manage(shortcuts::WindowVisibility {
             is_hidden: Mutex::new(false),
         })
@@ -118,6 +119,7 @@ pub fn run() {
             agents::run_claude,
             agents::run_codex,
             agents::run_gemini,
+            agents::kill_agent_process,
         ])
         .setup(|app| {
             // Migrate pluely.db → freely.db for existing users before the SQL plugin
