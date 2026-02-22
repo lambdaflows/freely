@@ -123,6 +123,8 @@ pub fn run() {
             agents::run_gemini,
         ])
         .setup(|app| {
+            // Rename pluely.db → freely.db for existing users before any DB access
+            db::migrate_legacy_db(app);
             // Setup main window positioning
             window::setup_main_window(app).expect("Failed to setup main window");
             #[cfg(target_os = "macos")]
