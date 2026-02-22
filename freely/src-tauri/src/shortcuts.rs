@@ -30,28 +30,6 @@ impl Default for RegisteredShortcuts {
     }
 }
 
-pub struct LicenseState {
-    has_active_license: AtomicBool,
-}
-
-impl Default for LicenseState {
-    fn default() -> Self {
-        LicenseState {
-            has_active_license: AtomicBool::new(true),
-        }
-    }
-}
-
-impl LicenseState {
-    pub fn is_active(&self) -> bool {
-        self.has_active_license.load(Ordering::Relaxed)
-    }
-
-    pub fn set_active(&self, active: bool) {
-        self.has_active_license.store(active, Ordering::Relaxed);
-    }
-}
-
 pub(crate) type MoveWindowTask = Arc<AtomicBool>;
 
 pub(crate) struct MoveWindowState {
@@ -477,20 +455,6 @@ pub fn validate_shortcut_key(key: String) -> Result<bool, String> {
             Ok(false)
         }
     }
-}
-
-#[tauri::command]
-pub fn set_license_status<R: Runtime>(app: AppHandle<R>, has_license: bool) -> Result<(), String> {
-    {
-        let state = app.state::<LicenseState>();
-        state.set_active(has_license);
-    }
-
-    if !has_license {
-        stop_all_move_windows(&app);
-    }
-
-    Ok(())
 }
 
 /// Tauri command to set app icon visibility in dock/taskbar

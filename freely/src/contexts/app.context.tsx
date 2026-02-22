@@ -154,16 +154,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    const syncLicenseState = async () => {
+    const syncShortcuts = async () => {
       try {
         const config = getShortcutsConfig();
         await invoke("update_shortcuts", { config });
       } catch (error) {
-        console.error("Failed to synchronize shortcut state:", error);
+        console.error("Failed to synchronize shortcuts:", error);
       }
     };
 
-    syncLicenseState();
+    syncShortcuts();
   }, [hasActiveLicense]);
 
   // Function to load AI, STT, system prompt and screenshot config data from storage
