@@ -56,6 +56,8 @@ interface ClaudeInvokePayload {
   model?: string;
   /** Claude CLI session ID for --resume continuity */
   agentSessionId?: string;
+  /** Optional system prompt prepended to the user prompt for per-conversation context */
+  systemPrompt?: string;
 }
 
 /**
