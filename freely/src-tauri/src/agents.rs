@@ -142,8 +142,8 @@ pub async fn check_claude_authenticated() -> Result<AuthResult, String> {
         }
     };
 
-    // Run `claude --version` to verify it works
-    let output = Command::new(&binary)
+    // Step 1: Get version to confirm installation works
+    let version_output = Command::new(&binary)
         .arg("--version")
         .env_remove("CLAUDECODE")
         .env_remove("CLAUDE_CODE_ENTRYPOINT")
@@ -152,32 +152,66 @@ pub async fn check_claude_authenticated() -> Result<AuthResult, String> {
         .output()
         .await;
 
-    match output {
+    let version = match version_output {
         Ok(out) if out.status.success() => {
-            let version = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            Ok(AuthResult {
-                installed: true,
-                authenticated: true,
-                version: if version.is_empty() { None } else { Some(version) },
-                error: None,
-            })
+            let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if v.is_empty() { None } else { Some(v) }
         }
         Ok(out) => {
             let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            Ok(AuthResult {
+            return Ok(AuthResult {
                 installed: true,
                 authenticated: false,
                 version: None,
                 error: if stderr.is_empty() { None } else { Some(stderr) },
-            })
+            });
         }
-        Err(e) => Ok(AuthResult {
-            installed: true,
-            authenticated: false,
-            version: None,
-            error: Some(e.to_string()),
-        }),
-    }
+        Err(e) => {
+            return Ok(AuthResult {
+                installed: true,
+                authenticated: false,
+                version: None,
+                error: Some(e.to_string()),
+            });
+        }
+    };
+
+    // Step 2: Check authentication via `claude auth status`.
+    // Returns JSON with {"loggedIn": true/false} — no API call needed.
+    // `claude --version` always succeeds regardless of auth state, so we
+    // need this separate check to verify the user is actually logged in.
+    let auth_output = Command::new(&binary)
+        .arg("auth")
+        .arg("status")
+        .env_remove("CLAUDECODE")
+        .env_remove("CLAUDE_CODE_ENTRYPOINT")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await;
+
+    let authenticated = match auth_output {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            // Parse the JSON to check loggedIn field
+            serde_json::from_str::<serde_json::Value>(&stdout)
+                .ok()
+                .and_then(|v| v.get("loggedIn")?.as_bool())
+                .unwrap_or(false)
+        }
+        _ => false,
+    };
+
+    Ok(AuthResult {
+        installed: true,
+        authenticated,
+        version,
+        error: if !authenticated {
+            Some("Claude CLI is installed but not authenticated. Run `claude login` in a terminal.".to_string())
+        } else {
+            None
+        },
+    })
 }
 
 // ============================================================================

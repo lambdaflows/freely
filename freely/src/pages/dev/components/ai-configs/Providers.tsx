@@ -60,6 +60,26 @@ const AgentProviderConfig = ({
     import("@tauri-apps/api/core").then(({ invoke }) =>
       invoke("open_terminal_for_login").catch(() => {})
     );
+    // Auto-poll for auth status after user opens terminal to login.
+    // Check every 3s for up to 2 minutes.
+    let polls = 0;
+    const maxPolls = 40;
+    const interval = setInterval(() => {
+      polls++;
+      if (polls >= maxPolls) {
+        clearInterval(interval);
+        return;
+      }
+      import("@tauri-apps/api/core")
+        .then(({ invoke }) => invoke<ClaudeAuthStatus>("check_claude_authenticated"))
+        .then((status) => {
+          if (status.authenticated) {
+            setClaudeStatus(status);
+            clearInterval(interval);
+          }
+        })
+        .catch(() => {});
+    }, 3000);
   };
 
   if (providerId === "claude-code") {
