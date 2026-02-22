@@ -240,7 +240,7 @@ fn migrate_pluely_db(app: &AppHandle) {
 
     if old_path.exists() && !new_path.exists() {
         match std::fs::rename(&old_path, &new_path) {
-            Ok(()) => eprintln!(
+            Ok(()) => println!(
                 "[migrate_pluely_db] Renamed {:?} → {:?}",
                 old_path, new_path
             ),
@@ -248,6 +248,24 @@ fn migrate_pluely_db(app: &AppHandle) {
                 "[migrate_pluely_db] Failed to rename {:?} → {:?}: {}",
                 old_path, new_path, e
             ),
+        }
+
+        // Also rename SQLite WAL sidecar files if they exist.
+        for suffix in &["-wal", "-shm"] {
+            let old_sidecar = data_dir.join(format!("pluely.db{}", suffix));
+            let new_sidecar = data_dir.join(format!("freely.db{}", suffix));
+            if old_sidecar.exists() {
+                match std::fs::rename(&old_sidecar, &new_sidecar) {
+                    Ok(()) => println!(
+                        "[migrate_pluely_db] Renamed {:?} → {:?}",
+                        old_sidecar, new_sidecar
+                    ),
+                    Err(e) => eprintln!(
+                        "[migrate_pluely_db] Failed to rename {:?} → {:?}: {}",
+                        old_sidecar, new_sidecar, e
+                    ),
+                }
+            }
         }
     }
 }
