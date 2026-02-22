@@ -2,7 +2,7 @@ import { Button, Header, Input, Selection, TextInput } from "@/components";
 import { UseSettingsReturn } from "@/types";
 import curl2Json, { ResultJSON } from "@bany/curl-to-json";
 import { KeyIcon, TrashIcon, BotIcon, CheckCircleIcon, XCircleIcon, TerminalIcon, LoaderIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AGENT_PROVIDER_IDS } from "@/lib/agents";
 
 // ---------------------------------------------------------------------------
@@ -35,6 +35,18 @@ const AgentProviderConfig = ({
 }: AgentProviderConfigProps) => {
   const [claudeStatus, setClaudeStatus] = useState<ClaudeAuthStatus | null>(null);
   const [checking, setChecking] = useState(false);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollInFlightRef = useRef(false);
+
+  // Clean up polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   // Check Claude CLI install + auth status
   const checkClaude = () => {
@@ -60,25 +72,42 @@ const AgentProviderConfig = ({
     import("@tauri-apps/api/core").then(({ invoke }) =>
       invoke("open_terminal_for_login").catch(() => {})
     );
+
+    // Clear any existing polling interval to prevent stacking
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
     // Auto-poll for auth status after user opens terminal to login.
     // Check every 3s for up to 2 minutes.
     let polls = 0;
     const maxPolls = 40;
-    const interval = setInterval(() => {
+    pollIntervalRef.current = setInterval(() => {
       polls++;
       if (polls >= maxPolls) {
-        clearInterval(interval);
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
         return;
       }
+      // Skip if a previous poll is still in-flight
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
       import("@tauri-apps/api/core")
         .then(({ invoke }) => invoke<ClaudeAuthStatus>("check_claude_authenticated"))
         .then((status) => {
           if (status.authenticated) {
             setClaudeStatus(status);
-            clearInterval(interval);
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
           }
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => { pollInFlightRef.current = false; });
     }, 3000);
   };
 

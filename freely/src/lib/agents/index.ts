@@ -54,7 +54,6 @@ export type {
   TaskResult,
   MessageRange,
   FreelyExecutionResult,
-  IMessagesRepository,
   ISessionsRepository,
   TaskStatus,
 } from './types.js';

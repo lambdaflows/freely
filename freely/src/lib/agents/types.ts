@@ -271,12 +271,6 @@ export interface FreelyExecutionResult {
 // Repository Interfaces (used internally by tool adapters)
 // ============================================================================
 
-/** Minimal interface that tool classes use to look up messages */
-export interface IMessagesRepository {
-  findBySessionId(sessionId: SessionID): Promise<Message[]>;
-  create(message: Message): Promise<Message>;
-}
-
 /** Minimal interface that tool classes use to manage sessions */
 export interface ISessionsRepository {
   findById(sessionId: SessionID): Promise<{ session_id: SessionID; sdk_session_id?: string } | null>;

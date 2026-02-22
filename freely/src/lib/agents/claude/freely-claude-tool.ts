@@ -151,6 +151,8 @@ export class FreelyClaudeTool {
     let responseText = '';
     let resolvedModel: string | undefined;
     let wasStopped = false;
+    /** Captured from stream events; persisted after stream completes to avoid race conditions */
+    let capturedAgentSessionId: string | undefined;
 
     if (!isTauriContext()) {
       // Non-Tauri fallback: return a placeholder (dev environment)
@@ -209,7 +211,7 @@ export class FreelyClaudeTool {
         if (event.resolvedModel) resolvedModel = event.resolvedModel;
 
         if (event.agentSessionId) {
-          this.sessionsRepo.update(sessionId, { sdk_session_id: event.agentSessionId });
+          capturedAgentSessionId = event.agentSessionId;
         }
       });
 
@@ -218,6 +220,12 @@ export class FreelyClaudeTool {
         await tauriInvoke<ClaudeStreamEvent[]>('run_claude', { payload });
       } finally {
         unlisten();
+      }
+
+      // Persist the Claude CLI session ID for --resume continuity on next call.
+      // Done after stream completes to avoid race conditions with rapid mic presses.
+      if (capturedAgentSessionId) {
+        await this.sessionsRepo.update(sessionId, { sdk_session_id: capturedAgentSessionId });
       }
 
       if (streamingCallbacks) {

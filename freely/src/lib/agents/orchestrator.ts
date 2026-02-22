@@ -108,9 +108,15 @@ export class FreelyAgentOrchestrator {
   private buildPromptWithHistory(params: AgentExecuteParams): string {
     if (!params.history?.length) return params.userMessage;
 
+    const MAX_HISTORY_MESSAGES = 20;
+
     const historyBlock = params.history
-      .slice(-20) // Last 20 messages max to avoid token overflow
-      .map((m) => `[${m.role}]: ${m.content}`)
+      .slice(-MAX_HISTORY_MESSAGES)
+      .map((m) => {
+        // Escape closing tags to prevent content from breaking the XML-like structure
+        const sanitized = m.content.replace(/<\//g, '&lt;/');
+        return `[${m.role}]: ${sanitized}`;
+      })
       .join('\n\n');
 
     return `<conversation_history>\n${historyBlock}\n</conversation_history>\n\n${params.userMessage}`;

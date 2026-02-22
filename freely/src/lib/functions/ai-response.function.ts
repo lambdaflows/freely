@@ -212,14 +212,20 @@ export async function* fetchAIResponse(params: {
         selectedProvider.variables?.MODEL ||
         selectedProvider.variables?.model;
 
+      // Claude Code uses --resume for session continuity — skip history to avoid wasted work.
+      // Codex and Gemini need history injected into the prompt (no --resume equivalent).
+      const needsHistory = selectedProvider.provider !== "claude-code";
+
       yield* freelyAgentOrchestrator.execute({
         toolType: selectedProvider.provider as AgentProviderId,
         userMessage,
         systemPrompt: enhancedSystemPrompt,
-        history: history.map((m) => ({
-          role: m.role as "user" | "assistant" | "system",
-          content: typeof m.content === "string" ? m.content : "",
-        })),
+        history: needsHistory
+          ? history.map((m) => ({
+              role: m.role as "user" | "assistant" | "system",
+              content: typeof m.content === "string" ? m.content : "",
+            }))
+          : undefined,
         sessionId: conversationId,
         apiKey,
         model,
