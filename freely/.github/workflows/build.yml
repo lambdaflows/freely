@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Create dummy environment file
+        run: |
+          echo "API_ACCESS_KEY=placeholder" > src-tauri/.env
+          echo "PAYMENT_ENDPOINT=placeholder" >> src-tauri/.env
+          echo "APP_ENDPOINT=placeholder" >> src-tauri/.env
+          echo "POSTHOG_API_KEY=placeholder" >> src-tauri/.env
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build Tauri app
+        run: npx tauri build --target aarch64-apple-darwin
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: freely-macos-aarch64
+          path: src-tauri/target/aarch64-apple-darwin/release/bundle/

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  frontend:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Create dummy environment file
+        run: |
+          echo "API_ACCESS_KEY=placeholder" > src-tauri/.env
+          echo "PAYMENT_ENDPOINT=placeholder" >> src-tauri/.env
+          echo "APP_ENDPOINT=placeholder" >> src-tauri/.env
+          echo "POSTHOG_API_KEY=placeholder" >> src-tauri/.env
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Frontend build
+        run: npx vite build
+
+      - name: Unit tests
+        run: npx vitest run
+
+  rust:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev \
+            librsvg2-dev patchelf libgtk-3-dev pkg-config \
+            libasound2-dev libpulse-dev fuse libfuse2 squashfs-tools \
+            xz-utils wget file libglib2.0-dev libgdk-pixbuf2.0-dev libcairo-gobject2 \
+            libayatana-appindicator3-dev ca-certificates binutils
+          sudo update-ca-certificates -f
+
+      - name: Create dummy environment file
+        run: |
+          echo "API_ACCESS_KEY=placeholder" > src-tauri/.env
+          echo "PAYMENT_ENDPOINT=placeholder" >> src-tauri/.env
+          echo "APP_ENDPOINT=placeholder" >> src-tauri/.env
+          echo "POSTHOG_API_KEY=placeholder" >> src-tauri/.env
+
+      - name: Cargo check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Cargo clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
