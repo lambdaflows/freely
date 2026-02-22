@@ -123,6 +123,10 @@ pub fn run() {
             agents::run_gemini,
         ])
         .setup(|app| {
+            // Migrate pluely.db → freely.db for existing users before the SQL plugin
+            // opens the database for the first time.
+            migrate_pluely_db(app.handle());
+
             // Setup main window positioning
             window::setup_main_window(app).expect("Failed to setup main window");
             #[cfg(target_os = "macos")]
@@ -214,6 +218,38 @@ pub fn run() {
     builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// One-time migration: rename `pluely.db` to `freely.db` so existing users
+/// retain their conversation history after the rename.
+///
+/// The tauri-plugin-sql stores SQLite files in `app_local_data_dir()`.
+/// We rename before the plugin opens the file (which happens lazily on first JS access).
+/// If `freely.db` already exists we leave both files untouched to avoid overwriting data.
+fn migrate_pluely_db(app: &AppHandle) {
+    let data_dir = match app.path().app_local_data_dir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            eprintln!("[migrate_pluely_db] Could not resolve app_local_data_dir: {}", e);
+            return;
+        }
+    };
+
+    let old_path = data_dir.join("pluely.db");
+    let new_path = data_dir.join("freely.db");
+
+    if old_path.exists() && !new_path.exists() {
+        match std::fs::rename(&old_path, &new_path) {
+            Ok(()) => eprintln!(
+                "[migrate_pluely_db] Renamed {:?} → {:?}",
+                old_path, new_path
+            ),
+            Err(e) => eprintln!(
+                "[migrate_pluely_db] Failed to rename {:?} → {:?}: {}",
+                old_path, new_path, e
+            ),
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]
