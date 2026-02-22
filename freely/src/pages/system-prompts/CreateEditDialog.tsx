@@ -9,7 +9,6 @@ import {
   Input,
   Textarea,
 } from "@/components";
-import { GenerateSystemPrompt } from "./Generate";
 import { SparklesIcon } from "lucide-react";
 
 interface CreateEditDialogProps {
@@ -28,7 +27,6 @@ interface CreateEditDialogProps {
     }>
   >;
   onSave: () => void;
-  onGenerate: (prompt: string, promptName: string) => void;
   isEditing?: boolean;
   isSaving?: boolean;
 }
@@ -39,7 +37,6 @@ export const CreateEditDialog = ({
   form,
   setForm,
   onSave,
-  onGenerate,
   isEditing = false,
   isSaving = false,
 }: CreateEditDialogProps) => {
@@ -53,18 +50,15 @@ export const CreateEditDialog = ({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col p-0">
         <DialogHeader className="mt-4 px-6 shrink-0">
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle>
-                {isEditing ? "Edit System Prompt" : "Create System Prompt"}
-              </DialogTitle>
-              <DialogDescription className="mt-1">
-                {isEditing
-                  ? "Update your system prompt details below."
-                  : "Define a new AI behavior and personality."}
-              </DialogDescription>
-            </div>
-            <GenerateSystemPrompt onGenerate={onGenerate} />
+          <div>
+            <DialogTitle>
+              {isEditing ? "Edit System Prompt" : "Create System Prompt"}
+            </DialogTitle>
+            <DialogDescription className="mt-1">
+              {isEditing
+                ? "Update your system prompt details below."
+                : "Define a new AI behavior and personality."}
+            </DialogDescription>
           </div>
         </DialogHeader>
         <div className="space-y-4 py-4 px-6 overflow-y-auto flex-1">

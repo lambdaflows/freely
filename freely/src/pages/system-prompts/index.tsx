@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 import { DeleteSystemPrompt } from "./Delete";
 import { CreateEditDialog } from "./CreateEditDialog";
-import { PluelyPrompts } from "./PluelyPrompts";
 import { useState } from "react";
 import { PageLayout } from "@/layouts";
 
@@ -131,20 +130,6 @@ const SystemPrompts = () => {
     await deletePrompt(id);
     setForm({ name: "", prompt: "" });
     setIsDeleteDialogOpen(false);
-  };
-
-  /**
-   * Handle AI generation
-   */
-  const handleGenerate = (
-    generatedPrompt: string,
-    generatedPromptName: string
-  ) => {
-    setForm((prev) => ({
-      ...prev,
-      prompt: generatedPrompt,
-      name: generatedPromptName,
-    }));
   };
 
   /**
@@ -280,7 +265,6 @@ const SystemPrompts = () => {
         form={form}
         setForm={setForm}
         onSave={handleSave}
-        onGenerate={handleGenerate}
         isEditing={!!form.id}
         isSaving={isSaving}
       />
@@ -294,8 +278,6 @@ const SystemPrompts = () => {
         onDelete={handleDeleteConfirm}
       />
 
-      {/* Pluely Default Prompts */}
-      <PluelyPrompts />
     </PageLayout>
   );
 };
