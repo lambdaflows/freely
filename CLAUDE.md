@@ -1,4 +1,4 @@
-# DevTeam - Multi-Agent Development Repository
+# Freely - AI Assistant Desktop App
 
 ## Team Agents
 
