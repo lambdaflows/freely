@@ -6,9 +6,8 @@
  * - Execution: invokes gemini CLI via Tauri shell command
  * - Storage: localStorage via FreelyStorageAdapter
  *
- * NOTE: The actual SDK streaming from extracted-from-agor/gemini/prompt-service.ts
- * requires Node.js (@google/gemini-cli-core). In a Tauri app this runs in the Rust
- * backend as a sidecar. Wire up `invoke('run_gemini', ...)` when implemented.
+ * NOTE: SDK streaming requires Node.js (@google/gemini-cli-core). In a Tauri app this
+ * runs in the Rust backend as a sidecar. Wire up `invoke('run_gemini', ...)` when implemented.
  */
 
 import {

@@ -6,10 +6,8 @@
  * - Execution: invokes claude CLI via Tauri shell command
  * - Storage: localStorage via FreelyStorageAdapter
  *
- * NOTE: The actual SDK streaming from extracted-from-agor/claude/prompt-service.ts
- * requires Node.js (@anthropic-ai/claude-agent-sdk). In a Tauri app this runs
- * in the Rust backend as a sidecar. Wire up the Tauri `invoke('run_claude', ...)`
- * command when the Rust sidecar is implemented.
+ * NOTE: SDK streaming requires Node.js (@anthropic-ai/claude-agent-sdk). In a Tauri app
+ * this runs in the Rust backend as a sidecar. Wire up `invoke('run_claude', ...)` when implemented.
  */
 
 import {
@@ -276,7 +274,7 @@ export class FreelyClaudeTool {
   async importSession(_sessionId: string, _options?: ImportOptions): Promise<void> {
     throw new Error(
       'FreelyClaudeTool.importSession: not yet implemented. ' +
-      'Wire up transcript parsing from extracted-from-agor/claude/import/'
+      'Transcript parsing not yet implemented.'
     );
   }
 

@@ -1,9 +1,8 @@
 /**
  * Freely Storage Adapter
  *
- * localStorage-based implementations of the service interfaces expected by
- * extracted-from-agor tool classes. Replaces Feathers/Drizzle repositories
- * with browser-compatible storage for Freely's Tauri context.
+ * localStorage-based implementations of the service interfaces for Freely's
+ * Tauri context. Replaces server-side repositories with browser-compatible storage.
  */
 
 import type {

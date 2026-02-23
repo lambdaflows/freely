@@ -6,9 +6,8 @@
  * - Execution: invokes codex CLI via Tauri shell command
  * - Storage: localStorage via FreelyStorageAdapter
  *
- * NOTE: The actual SDK streaming from extracted-from-agor/codex/prompt-service.ts
- * requires Node.js (@openai/codex-sdk). In a Tauri app this runs in the Rust
- * backend as a sidecar. Wire up `invoke('run_codex', ...)` when implemented.
+ * NOTE: SDK streaming requires Node.js (@openai/codex-sdk). In a Tauri app this
+ * runs in the Rust backend as a sidecar. Wire up `invoke('run_codex', ...)` when implemented.
  */
 
 import {

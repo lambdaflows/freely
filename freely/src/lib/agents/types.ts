@@ -1,8 +1,7 @@
 /**
  * Freely Agent Types
  *
- * Standalone type definitions replacing @agor/core dependencies.
- * These mirror the Agor type system but are decoupled for Freely's browser/Tauri context.
+ * Standalone type definitions for Freely's browser/Tauri context.
  */
 
 // ============================================================================
@@ -60,7 +59,7 @@ export type MessageSource = 'user' | 'api' | 'system' | 'import';
 // Permission Modes
 // ============================================================================
 
-/** Freely unified permission mode (mirrors Agor's PermissionMode) */
+/** Freely unified permission mode */
 export type PermissionMode =
   | 'default'
   | 'acceptEdits'
