@@ -9,6 +9,7 @@
 //! 3. Reads stdout line-by-line, emitting `agent:stream:{session_id}` events
 //! 4. Returns a collected Vec<StreamEvent> when the process exits
 
+use crate::claude_config;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Stdio;
@@ -128,6 +129,10 @@ pub struct AgentPayload {
     /// When set, the CLI resumes the existing conversation instead of starting fresh.
     #[serde(rename = "agentSessionId")]
     pub agent_session_id: Option<String>,
+    /// Optional system prompt injected by the frontend for per-conversation context.
+    /// When set, it is prepended to the user prompt before passing to the CLI.
+    #[serde(rename = "systemPrompt")]
+    pub system_prompt: Option<String>,
 }
 
 // ============================================================================
@@ -399,6 +404,9 @@ pub async fn run_claude(
     payload: AgentPayload,
     registry: tauri::State<'_, AgentProcessRegistry>,
 ) -> Result<Vec<StreamEvent>, String> {
+    // Ensure the .claude config directory exists with default files on first run.
+    let claude_dir = claude_config::init_claude_config(&app)?;
+
     let binary = resolve_binary("claude").await?;
 
     let mut cmd = Command::new(&binary);
@@ -407,9 +415,23 @@ pub async fn run_claude(
     cmd.env_remove("CLAUDECODE")
         .env_remove("CLAUDE_CODE_ENTRYPOINT");
 
+    // Set working directory: use the user's project directory when provided,
+    // otherwise fall back to the .claude config dir so the CLI picks up CLAUDE.md.
+    if let Some(ref working_dir) = payload.working_directory {
+        cmd.current_dir(working_dir);
+    } else {
+        cmd.current_dir(&claude_dir);
+    }
+
+    // Build the effective prompt, prepending any system_prompt from the frontend.
+    let effective_prompt = match &payload.system_prompt {
+        Some(sys) => format!("{}\n\n{}", sys, payload.prompt),
+        None => payload.prompt.clone(),
+    };
+
     // Claude CLI: `claude -p "prompt"` for non-interactive
     cmd.arg("-p")
-        .arg(&payload.prompt)
+        .arg(&effective_prompt)
         .arg("--output-format")
         .arg("stream-json")
         .arg("--verbose");

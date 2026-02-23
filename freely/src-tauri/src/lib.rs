@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod agents;
 mod api;
+mod claude_config;
 mod capture;
 mod db;
 mod shortcuts;
@@ -111,6 +112,8 @@ pub fn run() {
             agents::run_codex,
             agents::run_gemini,
             agents::kill_agent_process,
+            claude_config::get_claude_md,
+            claude_config::update_claude_md,
         ])
         .setup(|app| {
             // Migrate pluely.db → freely.db for existing users before the SQL plugin
