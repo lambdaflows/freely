@@ -8,6 +8,8 @@ mod shortcuts;
 mod window;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager};
+#[cfg(target_os = "macos")]
+use tauri::WebviewWindow;
 use tauri_plugin_posthog::{init as posthog_init, PostHogConfig, PostHogOptions};
 use tokio::task::JoinHandle;
 mod speaker;
