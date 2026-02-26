@@ -7,6 +7,7 @@ mod db;
 mod shortcuts;
 mod window;
 use std::sync::{Arc, Mutex};
+use parking_lot::Mutex as PLMutex;
 use tauri::{AppHandle, Manager};
 #[cfg(target_os = "macos")]
 use tauri::WebviewWindow;
@@ -27,6 +28,10 @@ pub struct AudioState {
     is_capturing: Arc<Mutex<bool>>,
 }
 
+pub struct WhisperState {
+    pub engine: PLMutex<Option<speaker::local_whisper::WhisperEngine>>,
+}
+
 #[tauri::command]
 fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
@@ -45,6 +50,9 @@ pub fn run() {
         )
         .manage(AudioState::default())
         .manage(CaptureState::default())
+        .manage(WhisperState {
+            engine: PLMutex::new(None),
+        })
         .manage(agents::AgentProcessRegistry::default())
         .manage(shortcuts::WindowVisibility {
             is_hidden: Mutex::new(false),
@@ -118,6 +126,9 @@ pub fn run() {
             agents::kill_agent_process,
             claude_config::get_claude_md,
             claude_config::update_claude_md,
+            speaker::init_local_whisper,
+            speaker::transcribe_local,
+            speaker::get_local_whisper_status,
         ])
         .setup(|app| {
             // Migrate pluely.db → freely.db for existing users before the SQL plugin
